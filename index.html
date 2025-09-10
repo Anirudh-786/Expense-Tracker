@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Expense Tracker Multi-User</title>
+<title>Expense Tracker Multi-User with Password</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
   body{margin:0;font-family:Arial, sans-serif;background:#0f1724;color:#e6eef6;display:flex;align-items:center;justify-content:center;padding:20px;}
@@ -23,14 +23,18 @@
 </head>
 <body>
   <div class="container">
+    <!-- Login / Signup -->
     <div class="card" id="loginCard">
       <h1>Login / Sign Up</h1>
       <label>Username</label>
       <input id="loginName" placeholder="Enter username">
+      <label>Password</label>
+      <input id="loginPassword" type="password" placeholder="Enter password">
       <button class="btn-primary" onclick="login()">Login</button>
-      <p style="color:#9aa4b2;font-size:13px;">(If username doesn't exist, a new account will be created)</p>
+      <p style="color:#9aa4b2;font-size:13px;">If username doesn't exist, a new account will be created.</p>
     </div>
 
+    <!-- App Info -->
     <div class="card" id="appCard" style="display:none;">
       <h1>Expense Tracker (Multi-User)</h1>
       <p><b>Logged in as:</b> <span id="userNameDisplay"></span>
@@ -40,6 +44,7 @@
       <p><b>Remaining:</b> ₹<span id="remainingDisplay">0</span></p>
     </div>
 
+    <!-- Main Grid -->
     <div class="grid" id="mainGrid" style="display:none;">
       <div class="card">
         <h2>Add Expense</h2>
@@ -71,7 +76,7 @@
   </div>
 
 <script>
-const STORAGE_KEY = 'expense_tracker_multiuser_v1';
+const STORAGE_KEY = 'expense_tracker_multiuser_pw_v1';
 let state = {users:{}, currentUser:null};
 
 function currency(n){return Number(n).toLocaleString(undefined,{minimumFractionDigits:2});}
@@ -80,14 +85,24 @@ function writeStorage(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
 
 function login(){
   const name=document.getElementById('loginName').value.trim();
-  if(!name){alert('Enter username');return;}
+  const pass=document.getElementById('loginPassword').value;
+  if(!name||!pass){alert('Enter username and password');return;}
   state=readStorage();
   if(!state.users[name]){
-    state.users[name]={budget:0,expenses:[]};
+    // create new account
+    state.users[name]={password:pass,budget:0,expenses:[]};
+    state.currentUser=name;
+    writeStorage();
+    showApp();
+  } else {
+    if(state.users[name].password===pass){
+      state.currentUser=name;
+      writeStorage();
+      showApp();
+    } else {
+      alert('Incorrect password');
+    }
   }
-  state.currentUser=name;
-  writeStorage();
-  showApp();
 }
 
 function logout(){
@@ -155,7 +170,7 @@ function renderCharts(data){
   const byDate={};data.forEach(e=>{byDate[e.date]=(byDate[e.date]||0)+e.amount;});
   const dates=Object.keys(byDate).sort(), amounts=dates.map(d=>byDate[d]);
   if(trendChart)trendChart.destroy();
-  trendChart=new Chart(ctx2,{type:'line',data:{labels:dates,datasets:[{label:'Daily Spend',data:amounts,fill:false,borderColor:'#60a5fa'}]}});
+  trendChart=new Chart(ctx2,{type:'line',data:{labels:dates,datasets:[{label:'Daily Spend',data:amounts,fill:false,borderColor:'#60a5fa'}]}}); 
 }
 
 // Init
