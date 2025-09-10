@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Expense Tracker Multi-User</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  body{margin:0;font-family:Arial, sans-serif;background:#0f1724;color:#e6eef6;display:flex;align-items:center;justify-content:center;padding:20px;}
+  .container{width:100%;max-width:1200px;}
+  .card{background:#0b1220;border-radius:14px;padding:18px;box-shadow:0 6px 30px rgba(2,6,23,0.6);margin-bottom:20px;}
+  h1{margin:0;font-size:22px;}
+  label{font-size:13px;color:#9aa4b2;}
+  input, select, button{margin-top:4px;padding:6px 8px;border-radius:6px;border:1px solid #444;background:#111;color:#e6eef6;}
+  button{cursor:pointer;}
+  .btn-primary{background:#6ee7b7;color:#000;border:none;}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+  @media(max-width:900px){.grid{grid-template-columns:1fr;}}
+  .expense-list{max-height:300px;overflow-y:auto;margin-top:10px;}
+  .expense-item{display:flex;justify-content:space-between;padding:6px;border-bottom:1px solid #222;}
+  canvas{background:#fff;border-radius:10px;padding:10px;}
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="card" id="loginCard">
+      <h1>Login / Sign Up</h1>
+      <label>Username</label>
+      <input id="loginName" placeholder="Enter username">
+      <button class="btn-primary" onclick="login()">Login</button>
+      <p style="color:#9aa4b2;font-size:13px;">(If username doesn't exist, a new account will be created)</p>
+    </div>
+
+    <div class="card" id="appCard" style="display:none;">
+      <h1>Expense Tracker (Multi-User)</h1>
+      <p><b>Logged in as:</b> <span id="userNameDisplay"></span>
+         <button onclick="logout()">Logout</button></p>
+      <p><b>Budget:</b> ₹<span id="budgetDisplay">0</span>
+         <button onclick="setBudget()">Set Budget</button></p>
+      <p><b>Remaining:</b> ₹<span id="remainingDisplay">0</span></p>
+    </div>
+
+    <div class="grid" id="mainGrid" style="display:none;">
+      <div class="card">
+        <h2>Add Expense</h2>
+        <label>Date</label>
+        <input id="dateInput" type="date">
+        <label>Amount</label>
+        <input id="amountInput" type="number" placeholder="120">
+        <label>Product</label>
+        <input id="productInput" type="text" placeholder="Food, Taxi...">
+        <label>Category</label>
+        <select id="categoryInput">
+          <option>General</option>
+          <option>Food</option>
+          <option>Transport</option>
+          <option>Shopping</option>
+          <option>Bills</option>
+          <option>Health</option>
+        </select>
+        <button class="btn-primary" onclick="addExpense()">Add Expense</button>
+        <div class="expense-list" id="expenseList"></div>
+      </div>
+
+      <div class="card">
+        <h2>Charts</h2>
+        <canvas id="categoryChart" height="180"></canvas>
+        <canvas id="trendChart" height="180"></canvas>
+      </div>
+    </div>
+  </div>
+
+<script>
+const STORAGE_KEY = 'expense_tracker_multiuser_v1';
+let state = {users:{}, currentUser:null};
+
+function currency(n){return Number(n).toLocaleString(undefined,{minimumFractionDigits:2});}
+function readStorage(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY))||{users:{}};}catch(e){return {users:{}};}}
+function writeStorage(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
+
+function login(){
+  const name=document.getElementById('loginName').value.trim();
+  if(!name){alert('Enter username');return;}
+  state=readStorage();
+  if(!state.users[name]){
+    state.users[name]={budget:0,expenses:[]};
+  }
+  state.currentUser=name;
+  writeStorage();
+  showApp();
+}
+
+function logout(){
+  state.currentUser=null;
+  writeStorage();
+  document.getElementById('loginCard').style.display='block';
+  document.getElementById('appCard').style.display='none';
+  document.getElementById('mainGrid').style.display='none';
+}
+
+function setBudget(){
+  const b=prompt('Enter new budget:');
+  if(b){
+    state.users[state.currentUser].budget=parseFloat(b)||0;
+    writeStorage();
+    render();
+  }
+}
+
+function addExpense(){
+  const u=state.users[state.currentUser];
+  const date=document.getElementById('dateInput').value;
+  const amount=parseFloat(document.getElementById('amountInput').value);
+  const product=document.getElementById('productInput').value;
+  const category=document.getElementById('categoryInput').value;
+  if(!date||!amount||!product){alert('Fill all fields');return;}
+  u.expenses.push({date,amount,product,category});
+  writeStorage();
+  render();
+}
+
+function showApp(){
+  document.getElementById('loginCard').style.display='none';
+  document.getElementById('appCard').style.display='block';
+  document.getElementById('mainGrid').style.display='grid';
+  render();
+}
+
+function render(){
+  if(!state.currentUser)return;
+  const u=state.users[state.currentUser];
+  document.getElementById('userNameDisplay').textContent=state.currentUser;
+  document.getElementById('budgetDisplay').textContent=currency(u.budget);
+  const spent=u.expenses.reduce((s,e)=>s+e.amount,0);
+  document.getElementById('remainingDisplay').textContent=currency(u.budget-spent);
+  const list=document.getElementById('expenseList');list.innerHTML='';
+  u.expenses.forEach(e=>{
+    const div=document.createElement('div');div.className='expense-item';
+    div.innerHTML=`<span>${e.date} - ${e.product} (${e.category})</span><span>₹${currency(e.amount)}</span>`;
+    list.appendChild(div);
+  });
+  renderCharts(u.expenses);
+}
+
+let categoryChart,trendChart;
+function renderCharts(data){
+  const ctx1=document.getElementById('categoryChart').getContext('2d');
+  const ctx2=document.getElementById('trendChart').getContext('2d');
+
+  const catTotals={};data.forEach(e=>{catTotals[e.category]=(catTotals[e.category]||0)+e.amount;});
+  const labels=Object.keys(catTotals), values=Object.values(catTotals);
+  if(categoryChart)categoryChart.destroy();
+  categoryChart=new Chart(ctx1,{type:'pie',data:{labels,datasets:[{data:values,backgroundColor:['#6ee7b7','#60a5fa','#f472b6','#facc15','#34d399','#f87171']}]}});
+
+  const byDate={};data.forEach(e=>{byDate[e.date]=(byDate[e.date]||0)+e.amount;});
+  const dates=Object.keys(byDate).sort(), amounts=dates.map(d=>byDate[d]);
+  if(trendChart)trendChart.destroy();
+  trendChart=new Chart(ctx2,{type:'line',data:{labels:dates,datasets:[{label:'Daily Spend',data:amounts,fill:false,borderColor:'#60a5fa'}]}});
+}
+
+// Init
+(function init(){
+  state=readStorage();
+  if(state.currentUser)showApp();
+})();
+</script>
+</body>
+</html>
